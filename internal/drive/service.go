@@ -27,8 +27,13 @@ func (s *ReviewService) BatchReview(actor string, ids []string, note string) (Ba
 		if err != nil {
 			return result, fmt.Errorf("review %s: %w", id, err)
 		}
-		defer handle.Close()
+		// Release the file handle as soon as the document is read instead of
+		// deferring until BatchReview returns, otherwise a batch larger than the
+		// handle cap exhausts the limit before earlier reviews close.
 		content, err := io.ReadAll(handle)
+		if cerr := handle.Close(); err == nil {
+			err = cerr
+		}
 		if err != nil {
 			return result, fmt.Errorf("read %s: %w", id, err)
 		}
