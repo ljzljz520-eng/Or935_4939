@@ -13,6 +13,20 @@ func NewReviewService(store *MemoryStore) *ReviewService {
 	return &ReviewService{store: store}
 }
 
+func (s *ReviewService) readDocument(id string) (string, error) {
+	handle, err := s.store.OpenDocument(id)
+	if err != nil {
+		return "", fmt.Errorf("review %s: %w", id, err)
+	}
+	defer handle.Close()
+
+	content, err := io.ReadAll(handle)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", id, err)
+	}
+	return string(content), nil
+}
+
 func (s *ReviewService) BatchReview(actor string, ids []string, note string) (BatchReviewResult, error) {
 	result := BatchReviewResult{Documents: make([]ReviewedDocument, 0, len(ids))}
 	if err := s.store.ValidateBatch(actor, ids, note); err != nil {
@@ -23,16 +37,11 @@ func (s *ReviewService) BatchReview(actor string, ids []string, note string) (Ba
 		if err != nil {
 			return result, err
 		}
-		handle, err := s.store.OpenDocument(id)
+		content, err := s.readDocument(id)
 		if err != nil {
-			return result, fmt.Errorf("review %s: %w", id, err)
+			return result, err
 		}
-		defer handle.Close()
-		content, err := io.ReadAll(handle)
-		if err != nil {
-			return result, fmt.Errorf("read %s: %w", id, err)
-		}
-		version, err := s.store.saveVersion(actor, id, note, string(content))
+		version, err := s.store.saveVersion(actor, id, note, content)
 		if err != nil {
 			return result, err
 		}
